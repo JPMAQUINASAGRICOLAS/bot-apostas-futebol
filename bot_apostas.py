@@ -31,20 +31,28 @@ LIGAS_PERMITIDAS = [
 def enviar_telegram(msg):
     url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": msg}
-    requests.post(url, json=payload)
+
+    try:
+        requests.post(url, json=payload, timeout=10)
+        print("📩 Mensagem enviada ao Telegram!")
+    except Exception as e:
+        print("Erro ao enviar Telegram:", e)
 
 # ================= API =================
 
 def jogos_do_dia():
     hoje = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
     r = requests.get(
         f"{BASE_URL}/fixtures",
         headers=HEADERS,
         params={"date": hoje, "status": "NS"}
     )
+
     if r.status_code != 200:
         print("Erro API:", r.status_code)
         return []
+
     return r.json().get("response", [])
 
 def ultimos_jogos(time_id):
@@ -53,14 +61,17 @@ def ultimos_jogos(time_id):
         headers=HEADERS,
         params={"team": time_id, "last": 5}
     )
+
     if r.status_code != 200:
         return []
+
     return r.json().get("response", [])
 
 # ================= ANÁLISE =================
 
 def analisar_time(jogos):
-    v = e = d = gf = gs = 0
+    v = e = d = gf = 0
+
     for j in jogos:
         home = j["teams"]["home"]["winner"]
         away = j["teams"]["away"]["winner"]
@@ -72,8 +83,8 @@ def analisar_time(jogos):
         else:
             d += 1
 
-        gf += j["goals"]["home"] or 0
-        gf += j["goals"]["away"] or 0
+        gf += (j["goals"]["home"] or 0)
+        gf += (j["goals"]["away"] or 0)
 
     return {
         "v": v,
@@ -85,15 +96,15 @@ def analisar_time(jogos):
 def gerar_entradas(dados_casa, dados_fora):
     entradas = []
 
-    # Entrada 1 – Favorito / Dupla Chance
+    # Favorito
     if dados_casa["v"] >= 3 and dados_fora["d"] >= 3:
         entradas.append(("Casa vence", 85))
 
-    # Entrada 2 – Over 1.5
+    # Over
     if dados_casa["gols"] + dados_fora["gols"] >= 10:
         entradas.append(("Over 1.5 gols", 80))
 
-    # Entrada 3 – Under 3.5
+    # Under
     if dados_casa["gols"] + dados_fora["gols"] <= 8:
         entradas.append(("Under 3.5 gols", 78))
 
@@ -103,49 +114,63 @@ def gerar_entradas(dados_casa, dados_fora):
 
 def main():
     print("🤖 BOT INICIADO")
-    jogos = jogos_do_dia()
-    enviados = 0
 
-    for jogo in jogos:
-        liga = jogo["league"]["name"]
+    # TESTE AUTOMÁTICO (manda mensagem quando liga)
+    enviar_telegram("🤖 Bot de apostas está ONLINE e analisando os jogos!")
 
-        if not any(l.lower() in liga.lower() for l in LIGAS_PERMITIDAS):
-            continue
+    while True:
+        try:
+            jogos = jogos_do_dia()
+            enviados = 0
 
-        casa = jogo["teams"]["home"]
-        fora = jogo["teams"]["away"]
+            if not jogos:
+                print("Nenhum jogo encontrado hoje.")
 
-        ult_casa = ultimos_jogos(casa["id"])
-        ult_fora = ultimos_jogos(fora["id"])
+            for jogo in jogos:
+                liga = jogo["league"]["name"]
 
-        if not ult_casa or not ult_fora:
-            continue
+                if not any(l.lower() in liga.lower() for l in LIGAS_PERMITIDAS):
+                    continue
 
-        dados_casa = analisar_time(ult_casa)
-        dados_fora = analisar_time(ult_fora)
+                casa = jogo["teams"]["home"]
+                fora = jogo["teams"]["away"]
 
-        entradas = gerar_entradas(dados_casa, dados_fora)
-        if not entradas:
-            continue
+                ult_casa = ultimos_jogos(casa["id"])
+                ult_fora = ultimos_jogos(fora["id"])
 
-        msg = f"⚽ {casa['name']} x {fora['name']}\n"
-        msg += f"🏆 {liga}\n"
-        msg += f"📊 Forma casa: {dados_casa['v']}V\n"
-        msg += f"📊 Forma fora: {dados_fora['v']}V\n\n"
+                if not ult_casa or not ult_fora:
+                    continue
 
-        for i, e in enumerate(entradas, start=1):
-            msg += f"🎯 Top {i}: {e[0]} ({e[1]}%)\n"
+                dados_casa = analisar_time(ult_casa)
+                dados_fora = analisar_time(ult_fora)
 
-        msg += "\n🔒 Entrada mais segura do jogo"
+                entradas = gerar_entradas(dados_casa, dados_fora)
+                if not entradas:
+                    continue
 
-        enviar_telegram(msg)
-        enviados += 1
-        time.sleep(2)
+                msg = f"⚽ {casa['name']} x {fora['name']}\n"
+                msg += f"🏆 {liga}\n"
+                msg += f"📊 Forma casa: {dados_casa['v']}V\n"
+                msg += f"📊 Forma fora: {dados_fora['v']}V\n\n"
 
-        if enviados >= 5:
-            break
+                for i, e in enumerate(entradas, start=1):
+                    msg += f"🎯 Top {i}: {e[0]} ({e[1]}%)\n"
 
-    print("✅ Análise finalizada")
+                msg += "\n🔒 Entrada mais segura do jogo"
+
+                enviar_telegram(msg)
+                enviados += 1
+                time.sleep(2)
+
+                if enviados >= 5:
+                    break
+
+            print("✅ Varredura concluída. Nova análise em 10 minutos.")
+            time.sleep(600)
+
+        except Exception as erro:
+            print("🚨 ERRO:", erro)
+            time.sleep(60)
 
 # ================= EXECUÇÃO =================
 
