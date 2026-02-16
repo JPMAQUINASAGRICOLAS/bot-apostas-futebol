@@ -18,6 +18,7 @@ HEADERS = {
 
 URL_TELEGRAM = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
 
+
 # =========================
 # ENVIAR TELEGRAM
 # =========================
@@ -31,11 +32,12 @@ def enviar(msg):
             "text": msg
         })
 
-        print("📩 Enviado Telegram com sucesso")
+        print("📩 Enviado com sucesso")
 
     except Exception as e:
 
         print("Erro Telegram:", e)
+
 
 # =========================
 # PEGAR JOGOS DO DIA
@@ -46,7 +48,8 @@ def pegar_jogos():
     hoje = datetime.now().strftime("%Y-%m-%d")
 
     params = {
-        "date": hoje
+        "date": hoje,
+        "timezone": "America/Sao_Paulo"
     }
 
     response = requests.get(URL_FIXTURES, headers=HEADERS, params=params)
@@ -60,12 +63,13 @@ def pegar_jogos():
 
     jogos = data["response"]
 
-    print(f"📊 Jogos hoje: {len(jogos)}")
+    print(f"📊 Jogos encontrados: {len(jogos)}")
 
     return jogos
 
+
 # =========================
-# ANALISAR JOGOS
+# ANALISAR E GERAR PALPITES
 # =========================
 
 def analisar(jogos):
@@ -79,33 +83,31 @@ def analisar(jogos):
             home = jogo["teams"]["home"]["name"]
             away = jogo["teams"]["away"]["name"]
 
-            score = (hash(home + away) % 40) + 60
+            liga = jogo["league"]["name"]
 
-            if score >= 75:
+            score = abs(hash(home + away)) % 100
 
-                if score >= 85:
-                    palpite = "Over 2.5 gols"
+            if score > 75:
+
+                if score > 90:
+                    palpite = "🔥 Over 2.5 gols"
+                elif score > 82:
+                    palpite = f"🏆 Vitória {home}"
                 else:
-                    palpite = "Vitória casa"
+                    palpite = "⚽ Ambas marcam"
 
-                texto = (
-                    f"{home} vs {away}\n"
-                    f"Palpite: {palpite}\n"
-                    f"Confiança: {score}%\n"
-                )
-
-                lista.append((score, texto))
+                lista.append({
+                    "texto": f"{home} x {away}\n{palpite}\nConfiança: {score}%",
+                    "score": score
+                })
 
         except:
             pass
 
-    lista.sort(reverse=True)
+    lista.sort(key=lambda x: x["score"], reverse=True)
 
-    top5 = [item[1] for item in lista[:5]]
+    return lista[:5]
 
-    print(f"🔥 Selecionados: {len(top5)}")
-
-    return top5
 
 # =========================
 # EXECUTAR BOT
@@ -113,7 +115,7 @@ def analisar(jogos):
 
 def executar():
 
-    print("🤖 ANALISANDO JOGOS DO DIA...")
+    print("🤖 ANALISANDO...")
 
     jogos = pegar_jogos()
 
@@ -122,20 +124,21 @@ def executar():
         enviar("❌ Nenhum jogo hoje")
         return
 
-    analise = analisar(jogos)
+    melhores = analisar(jogos)
 
-    if not analise:
+    if not melhores:
 
-        enviar("❌ Nenhuma oportunidade hoje")
+        enviar("❌ Nenhuma boa oportunidade hoje")
         return
 
-    mensagem = "🔥 TOP 5 PALPITES DO DIA\n\n"
+    msg = "🎯 TOP 5 PALPITES DO DIA\n\n"
 
-    for jogo in analise:
+    for j in melhores:
 
-        mensagem += jogo + "\n"
+        msg += j["texto"] + "\n\n"
 
-    enviar(mensagem)
+    enviar(msg)
+
 
 # =========================
 # ESPERAR ATÉ 08:00
@@ -143,29 +146,34 @@ def executar():
 
 def esperar_ate_8():
 
-    while True:
+    agora = datetime.now()
 
-        agora = datetime.now()
+    alvo = agora.replace(hour=8, minute=0, second=0, microsecond=0)
 
-        alvo = agora.replace(hour=8, minute=0, second=0, microsecond=0)
+    if agora >= alvo:
+        alvo += timedelta(days=1)
 
-        if agora >= alvo:
-            alvo += timedelta(days=1)
+    segundos = (alvo - agora).total_seconds()
 
-        espera = (alvo - agora).total_seconds()
+    print(f"⏳ Aguardando até 08:00 ({int(segundos)} segundos)")
 
-        print(f"⏳ Aguardando até 08:00 ({int(espera/3600)} horas)")
+    time.sleep(segundos)
 
-        time.sleep(espera)
-
-        executar()
 
 # =========================
-# INICIAR BOT
+# LOOP PRINCIPAL
 # =========================
 
-print("🚀 BOT INICIADO COM SUCESSO")
+print("🚀 BOT INICIADO")
 
-enviar("✅ BOT ONLINE - enviará palpites às 08:00")
+enviar("✅ BOT ONLINE")
 
-esperar_ate_8()
+while True:
+
+    esperar_ate_8()
+
+    executar()
+
+    print("✅ Próxima execução em 24h")
+
+    time.sleep(86400)
