@@ -2,75 +2,81 @@ import requests
 import time
 from datetime import datetime
 
+# ==========================
 # CONFIGURAÇÕES
-API_KEY = "4cbd56ddf35b371d573eee2b71cfc05c"
+# ==========================
+
+API_KEY = "1a185fa6bcccfcada90c54b747eb1172"
 TOKEN_TELEGRAM = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
 CHAT_ID = "6056076499"
 
-# URLS
 URL_FIXTURES = "https://v3.football.api-sports.io/fixtures"
-URL_TELEGRAM = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
+URL_TELEGRAM = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
 HEADERS = {
     "x-apisports-key": API_KEY
 }
 
+# ==========================
+# TELEGRAM
+# ==========================
 
-# ENVIAR MENSAGEM TELEGRAM
 def enviar_telegram(msg):
-    try:
-        response = requests.post(URL_TELEGRAM, data={
-            "chat_id": CHAT_ID,
-            "text": msg
-        })
 
-        if response.status_code == 200:
-            print("📩 Enviado Telegram com sucesso")
-        else:
-            print("Erro Telegram:", response.text)
+    try:
+
+        requests.post(
+            URL_TELEGRAM,
+            data={
+                "chat_id": CHAT_ID,
+                "text": msg
+            }
+        )
+
+        print("📩 Mensagem enviada ao Telegram")
 
     except Exception as e:
-        print("Erro ao enviar Telegram:", e)
+
+        print("Erro Telegram:", e)
 
 
+# ==========================
 # PEGAR JOGOS DO DIA
+# ==========================
+
 def pegar_jogos_hoje():
 
-    hoje = datetime.utcnow().strftime("%Y-%m-%d")
+    hoje = datetime.now().strftime("%Y-%m-%d")
 
     params = {
         "date": hoje,
         "timezone": "America/Sao_Paulo"
     }
 
-    try:
+    response = requests.get(
+        URL_FIXTURES,
+        headers=HEADERS,
+        params=params
+    )
 
-        response = requests.get(
-            URL_FIXTURES,
-            headers=HEADERS,
-            params=params
-        )
+    if response.status_code != 200:
 
-        if response.status_code != 200:
-
-            print("Erro API:", response.text)
-            return []
-
-        data = response.json()
-
-        jogos = data.get("response", [])
-
-        print(f"📊 Jogos encontrados hoje: {len(jogos)}")
-
-        return jogos
-
-    except Exception as e:
-
-        print("Erro conexão API:", e)
+        print("❌ Erro ao conectar API:", response.status_code)
         return []
 
+    data = response.json()
 
+    jogos = data.get("response", [])
+
+    print(f"📊 Jogos encontrados hoje: {len(jogos)}")
+
+    return jogos
+
+
+# ==========================
 # ANALISAR JOGOS
+# ==========================
+
 def analisar_jogos(jogos):
 
     selecionados = []
@@ -82,24 +88,28 @@ def analisar_jogos(jogos):
             home = jogo["teams"]["home"]["name"]
             away = jogo["teams"]["away"]["name"]
 
-            league = jogo["league"]["name"]
-            horario = jogo["fixture"]["date"][11:16]
+            liga = jogo["league"]["name"]
 
-            # SIMULAÇÃO DE CONFIANÇA (depois podemos melhorar)
+            status = jogo["fixture"]["status"]["short"]
+
+            if status != "NS":
+                continue
+
+            # confiança simulada (até integrar odds reais)
             confianca = abs(hash(home + away)) % 100
 
-            if confianca >= 65:
+            if confianca >= 70:
 
-                msg = (
+                texto = (
                     f"⚽ {home} vs {away}\n"
-                    f"🏆 {league}\n"
-                    f"🕒 {horario}\n"
+                    f"🏆 {liga}\n"
                     f"📊 Confiança: {confianca}%\n"
                 )
 
-                selecionados.append(msg)
+                selecionados.append(texto)
 
         except:
+
             continue
 
     print(f"🔥 Jogos qualificados: {len(selecionados)}")
@@ -107,10 +117,13 @@ def analisar_jogos(jogos):
     return selecionados
 
 
-# EXECUTAR BOT
+# ==========================
+# EXECUÇÃO PRINCIPAL
+# ==========================
+
 def executar():
 
-    print("\n🤖 ANALISANDO JOGOS...")
+    print("🤖 BOT INICIADO")
 
     jogos = pegar_jogos_hoje()
 
@@ -128,17 +141,22 @@ def executar():
 
     mensagem = "🔥 TOP JOGOS DO DIA\n\n"
 
-    for jogo in analise[:10]:
+    limite = min(len(analise), 10)
 
-        mensagem += jogo + "\n"
+    for i in range(limite):
+
+        mensagem += analise[i] + "\n"
 
     enviar_telegram(mensagem)
 
 
-# LOOP PRINCIPAL
-print("🚀 BOT INICIADO COM SUCESSO")
+# ==========================
+# LOOP 24H
+# ==========================
 
-enviar_telegram("🤖 Bot iniciado e analisando jogos 24h")
+print("🚀 BOT PROFISSIONAL INICIADO")
+
+enviar_telegram("🤖 Bot iniciado e analisando jogos do dia!")
 
 while True:
 
