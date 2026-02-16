@@ -2,198 +2,175 @@ import requests
 import time
 from datetime import datetime, timedelta
 
-# ============================================
+# =========================
 # CONFIGURAÇÕES
-# ============================================
+# =========================
 
 API_KEY = "1a185fa6bcccfcada90c54b747eb1172"
-TOKEN_TELEGRAM = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
+TELEGRAM_TOKEN = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
 CHAT_ID = "6056076499"
 
 URL_API = "https://v3.football.api-sports.io/fixtures"
-URL_TELEGRAM = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
+URL_TELEGRAM = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
 HEADERS = {
     "x-apisports-key": API_KEY
 }
 
-# ============================================
-# ENVIAR MENSAGEM TELEGRAM
-# ============================================
+# =========================
+# ENVIAR TELEGRAM
+# =========================
 
-def enviar_telegram(texto):
-
+def enviar_telegram(msg):
     try:
-        requests.post(URL_TELEGRAM, data={
+        data = {
             "chat_id": CHAT_ID,
-            "text": texto
-        })
+            "text": msg,
+            "parse_mode": "HTML"
+        }
+
+        requests.post(URL_TELEGRAM, data=data)
         print("📩 Enviado Telegram com sucesso")
 
     except Exception as e:
         print("Erro Telegram:", e)
 
-
-# ============================================
+# =========================
 # BUSCAR JOGOS DO DIA
-# ============================================
+# =========================
 
-def buscar_jogos_do_dia():
-
+def buscar_jogos():
     hoje = datetime.now().strftime("%Y-%m-%d")
 
     params = {
-        "date": hoje
+        "date": hoje,
+        "timezone": "America/Sao_Paulo"
     }
 
-    try:
-        response = requests.get(URL_API, headers=HEADERS, params=params)
-        dados = response.json()
+    response = requests.get(URL_API, headers=HEADERS, params=params)
 
-        jogos = []
-
-        for item in dados["response"]:
-
-            casa = item["teams"]["home"]["name"]
-            fora = item["teams"]["away"]["name"]
-
-            data_jogo = item["fixture"]["date"]
-            horario = datetime.fromisoformat(data_jogo.replace("Z", "")).strftime("%H:%M")
-
-            liga = item["league"]["name"]
-
-            jogos.append({
-                "home": casa,
-                "away": fora,
-                "time": horario,
-                "league": liga
-            })
-
-        print(f"📊 Jogos encontrados hoje: {len(jogos)}")
-        return jogos
-
-    except Exception as e:
-        print("Erro ao buscar jogos:", e)
+    if response.status_code != 200:
+        print("Erro API")
         return []
 
+    data = response.json()
+    jogos = data.get("response", [])
 
-# ============================================
-# GERAR PALPITE INTELIGENTE
-# ============================================
+    print(f"📊 Jogos encontrados hoje: {len(jogos)}")
 
-def gerar_palpite(jogo):
+    return jogos
 
-    casa = jogo["home"]
-    fora = jogo["away"]
+# =========================
+# ANALISAR E GERAR PALPITE
+# =========================
 
-    tamanho_casa = len(casa)
-    tamanho_fora = len(fora)
+def analisar_jogos(jogos):
 
-    if tamanho_casa < tamanho_fora:
-
-        prediction = f"Vitória {fora}"
-        confidence = 75 + (tamanho_fora % 20)
-
-    elif tamanho_fora < tamanho_casa:
-
-        prediction = f"Vitória {casa}"
-        confidence = 75 + (tamanho_casa % 20)
-
-    else:
-
-        prediction = "Mais de 1.5 gols"
-        confidence = 80
-
-    if confidence > 95:
-        confidence = 95
-
-    return prediction, confidence
-
-
-# ============================================
-# FILTRAR TOP 5 MELHORES
-# ============================================
-
-def selecionar_top5(jogos):
-
-    lista = []
+    melhores = []
 
     for jogo in jogos:
 
-        palpite, confianca = gerar_palpite(jogo)
+        try:
 
-        lista.append({
-            "home": jogo["home"],
-            "away": jogo["away"],
-            "time": jogo["time"],
-            "prediction": palpite,
-            "confidence": confianca
-        })
+            home = jogo["teams"]["home"]["name"]
+            away = jogo["teams"]["away"]["name"]
 
-    lista.sort(key=lambda x: x["confidence"], reverse=True)
+            gols_home = jogo["goals"]["home"]
+            gols_away = jogo["goals"]["away"]
 
-    top5 = lista[:5]
+            # lógica simples elite
+            if gols_home is None:
+                gols_home = 0
 
-    print(f"🔥 Top 5 selecionados")
+            if gols_away is None:
+                gols_away = 0
 
-    return top5
+            total = gols_home + gols_away
 
+            # definir palpite
+            if total >= 3:
+                palpite = "Over 2.5 gols"
+                confianca = 80
 
-# ============================================
-# ENVIAR TOP 5 DO DIA
-# ============================================
+            elif gols_home > gols_away:
+                palpite = f"{home} vence"
+                confianca = 75
 
-def enviar_top5(jogos):
+            elif gols_away > gols_home:
+                palpite = f"{away} vence"
+                confianca = 75
 
-    hoje = datetime.now().strftime("%d/%m/%Y")
+            else:
+                palpite = "Over 1.5 gols"
+                confianca = 70
 
-    mensagem = f"📊 ELITE TIP DO DIA\n\n📅 {hoje}\n\n"
+            hora = jogo["fixture"]["date"][11:16]
 
-    for i, jogo in enumerate(jogos, 1):
+            melhores.append({
+                "home": home,
+                "away": away,
+                "hora": hora,
+                "palpite": palpite,
+                "confianca": confianca
+            })
 
-        mensagem += (
-            f"{i}️⃣ {jogo['home']} vs {jogo['away']}\n"
-            f"🕒 {jogo['time']}\n"
-            f"🔥 Palpite: {jogo['prediction']}\n"
-            f"📊 Confiança: {jogo['confidence']}%\n\n"
+        except:
+            continue
+
+    # ordenar por confiança
+    melhores.sort(key=lambda x: x["confianca"], reverse=True)
+
+    return melhores[:5]
+
+# =========================
+# MONTAR MENSAGEM
+# =========================
+
+def montar_msg(jogos):
+
+    if not jogos:
+        return "❌ Nenhum jogo qualificado hoje"
+
+    msg = "🔥 <b>TOP 5 PALPITES DO DIA</b>\n\n"
+
+    for j in jogos:
+
+        msg += (
+            f"⚽ {j['home']} vs {j['away']}\n"
+            f"🕒 {j['hora']}\n"
+            f"🎯 {j['palpite']}\n"
+            f"📊 Confiança: {j['confianca']}%\n\n"
         )
 
-    enviar_telegram(mensagem)
+    return msg
 
+# =========================
+# EXECUÇÃO PRINCIPAL
+# =========================
 
-# ============================================
-# LOOP PRINCIPAL
-# ============================================
+def executar():
 
-def executar_bot():
+    print("🚀 BOT INICIADO")
 
-    print("🚀 BOT ELITE INICIADO")
-
-    enviar_telegram("🤖 BOT ELITE INICIADO")
+    enviar_telegram("🤖 BOT INICIADO")
 
     while True:
 
-        print("🔎 Buscando jogos do dia...")
+        print("🤖 ANALISANDO JOGOS DO DIA...")
 
-        jogos = buscar_jogos_do_dia()
+        jogos = buscar_jogos()
 
-        if jogos:
+        melhores = analisar_jogos(jogos)
 
-            top5 = selecionar_top5(jogos)
+        msg = montar_msg(melhores)
 
-            enviar_top5(top5)
+        enviar_telegram(msg)
 
-        else:
+        print("✅ Enviado. Aguardando 24h")
 
-            enviar_telegram("❌ Nenhum jogo encontrado hoje")
-
-        print("⏱ Próxima análise em 6 horas\n")
-
-        time.sleep(21600)  # 6 horas
+        time.sleep(86400)  # 24 horas
 
 
-# ============================================
-# START
-# ============================================
+# =========================
 
-executar_bot()
+executar()
