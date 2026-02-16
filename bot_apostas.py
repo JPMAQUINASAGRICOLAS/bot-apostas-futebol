@@ -1,27 +1,20 @@
 import requests
 import time
-from datetime import datetime, timedelta
-
-# =========================
-# CONFIGURAÇÕES
-# =========================
+from datetime import datetime
 
 API_KEY = "1a185fa6bcccfcada90c54b747eb1172"
 TOKEN_TELEGRAM = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
 CHAT_ID = "6056076499"
 
 URL_FIXTURES = "https://v3.football.api-sports.io/fixtures"
+URL_TELEGRAM = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
 
 HEADERS = {
     "x-apisports-key": API_KEY
 }
 
-URL_TELEGRAM = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
+ultimo_envio = None
 
-
-# =========================
-# ENVIAR TELEGRAM
-# =========================
 
 def enviar(msg):
 
@@ -32,16 +25,12 @@ def enviar(msg):
             "text": msg
         })
 
-        print("📩 Enviado com sucesso")
+        print("📩 Enviado Telegram")
 
     except Exception as e:
 
-        print("Erro Telegram:", e)
+        print("Erro:", e)
 
-
-# =========================
-# PEGAR JOGOS DO DIA
-# =========================
 
 def pegar_jogos():
 
@@ -56,21 +45,10 @@ def pegar_jogos():
 
     if response.status_code != 200:
 
-        print("Erro API")
         return []
 
-    data = response.json()
+    return response.json()["response"]
 
-    jogos = data["response"]
-
-    print(f"📊 Jogos encontrados: {len(jogos)}")
-
-    return jogos
-
-
-# =========================
-# ANALISAR E GERAR PALPITES
-# =========================
 
 def analisar(jogos):
 
@@ -82,8 +60,6 @@ def analisar(jogos):
 
             home = jogo["teams"]["home"]["name"]
             away = jogo["teams"]["away"]["name"]
-
-            liga = jogo["league"]["name"]
 
             score = abs(hash(home + away)) % 100
 
@@ -109,13 +85,9 @@ def analisar(jogos):
     return lista[:5]
 
 
-# =========================
-# EXECUTAR BOT
-# =========================
-
 def executar():
 
-    print("🤖 ANALISANDO...")
+    print("🤖 Executando análise")
 
     jogos = pegar_jogos()
 
@@ -128,7 +100,7 @@ def executar():
 
     if not melhores:
 
-        enviar("❌ Nenhuma boa oportunidade hoje")
+        enviar("❌ Nenhum palpite hoje")
         return
 
     msg = "🎯 TOP 5 PALPITES DO DIA\n\n"
@@ -140,40 +112,22 @@ def executar():
     enviar(msg)
 
 
-# =========================
-# ESPERAR ATÉ 08:00
-# =========================
-
-def esperar_ate_8():
-
-    agora = datetime.now()
-
-    alvo = agora.replace(hour=8, minute=0, second=0, microsecond=0)
-
-    if agora >= alvo:
-        alvo += timedelta(days=1)
-
-    segundos = (alvo - agora).total_seconds()
-
-    print(f"⏳ Aguardando até 08:00 ({int(segundos)} segundos)")
-
-    time.sleep(segundos)
-
-
-# =========================
-# LOOP PRINCIPAL
-# =========================
-
 print("🚀 BOT INICIADO")
 
 enviar("✅ BOT ONLINE")
 
 while True:
 
-    esperar_ate_8()
+    agora = datetime.now()
 
-    executar()
+    if agora.hour == 8 and agora.minute == 0:
 
-    print("✅ Próxima execução em 24h")
+        if ultimo_envio != agora.date():
 
-    time.sleep(86400)
+            executar()
+
+            ultimo_envio = agora.date()
+
+            print("✅ Enviado hoje")
+
+    time.sleep(30)
