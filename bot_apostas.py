@@ -214,6 +214,8 @@ def montar_msg(palpites):
 # LOOP PRINCIPAL
 # ==============================
 
+HORARIOS_ENVIO = [9, 12, 15]
+
 print("🚀 BOT ELITE INICIADO")
 
 ultimo_envio = None
@@ -222,11 +224,13 @@ while True:
 
     agora = datetime.datetime.now(FUSO)
 
-    if True:
+    if agora.hour in HORARIOS_ENVIO and agora.minute == 0:
 
-        if ultimo_envio != agora.date():
+        identificador = f"{agora.date()}-{agora.hour}"
 
-            print("📊 Gerando palpites...")
+        if ultimo_envio != identificador:
+
+            print(f"📊 Gerando palpites das {agora.hour}:00...")
 
             palpites = gerar_palpites()
 
@@ -234,9 +238,12 @@ while True:
 
             enviar_telegram(msg)
 
-            ultimo_envio = agora.date()
+            ultimo_envio = identificador
 
             print("✅ Palpites enviados com sucesso")
 
     time.sleep(30)
+
+
+
 
