@@ -222,17 +222,21 @@ while True:
 
     agora = datetime.datetime.now(FUSO)
 
-    if ultimo_envio != agora.date():
+    if True:
 
+        if ultimo_envio != agora.date():
 
-        palpites = gerar_palpites()
+            print("📊 Gerando palpites...")
 
-        msg = montar_msg(palpites)
+            palpites = gerar_palpites()
 
-        enviar_telegram(msg)
+            msg = montar_msg(palpites)
 
-        ultimo_envio = agora.date()
+            enviar_telegram(msg)
 
-        print("✅ Enviado com sucesso")
+            ultimo_envio = agora.date()
 
-    time.sleep(60)
+            print("✅ Palpites enviados com sucesso")
+
+    time.sleep(30)
+
