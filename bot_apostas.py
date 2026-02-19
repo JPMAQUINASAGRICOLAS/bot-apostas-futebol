@@ -166,13 +166,12 @@ def buscar_jogos():
             "competition_ok": True
         })
 
-print(f"✅ Jogos encontrados hoje: {len(jogos)}")
+    print(f"✅ Jogos encontrados hoje: {len(jogos)}")
 
-for j in jogos:
-    print(f"Jogo encontrado: {j['home']} x {j['away']} | Liga: {j['liga']}")
+    for j in jogos:
+        print(f"Jogo encontrado: {j['home']} x {j['away']} | Liga: {j['liga']}")
 
-return jogos
-
+    return jogos
 
 
 # ========================================
