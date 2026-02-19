@@ -166,7 +166,13 @@ def buscar_jogos():
             "competition_ok": True
         })
 
-    return jogos
+print(f"✅ Jogos encontrados hoje: {len(jogos)}")
+
+for j in jogos:
+    print(f"Jogo encontrado: {j['home']} x {j['away']} | Liga: {j['liga']}")
+
+return jogos
+
 
 
 # ========================================
@@ -346,6 +352,8 @@ def gerar_palpites():
     enviar_telegram("🤖 Analisando jogos...")
 
     jogos = buscar_jogos()
+
+    enviar_telegram(f"📊 Jogos encontrados hoje: {len(jogos)}")
 
     palpites = []
 
