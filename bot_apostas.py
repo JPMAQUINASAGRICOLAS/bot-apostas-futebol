@@ -8,7 +8,7 @@ import pytz
 # ========================================
 
 TELEGRAM_TOKEN = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
-TELEGRAM_CHAT_ID = "6056076499"
+CHAT_ID = "6056076499"
 API_KEY = "1a185fa6bcccfcada90c54b747eb1172"
 
 URL_FIXTURES = "https://v3.football.api-sports.io/fixtures"
