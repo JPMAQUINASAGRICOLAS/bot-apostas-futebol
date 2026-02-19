@@ -4,12 +4,12 @@ import datetime
 import pytz
 
 # ========================================
-# CONFIGURAÇÕES
+# CONFIGURAÇÕES (MANTIDAS COMO VOCÊ PEDIU)
 # ========================================
 
-TELEGRAM_TOKEN = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
-CHAT_ID = "6056076499"
 API_KEY = "1a185fa6bcccfcada90c54b747eb1172"
+TOKEN_TELEGRAM = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
+CHAT_ID = "6056076499"
 
 URL_FIXTURES = "https://v3.football.api-sports.io/fixtures"
 URL_TEAMS = "https://v3.football.api-sports.io/teams/statistics"
@@ -20,6 +20,7 @@ HEADERS = {
 
 FUSO = pytz.timezone("America/Sao_Paulo")
 
+# HORÁRIOS QUE VOCÊ PEDIU
 HORARIOS_ENVIO = [9, 12, 15]
 
 # ligas confiáveis
@@ -41,18 +42,22 @@ LIGAS_PERMITIDAS = [
 
 def enviar_telegram(msg):
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
 
     payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
+        "chat_id": CHAT_ID,
         "text": msg,
         "parse_mode": "HTML"
     }
 
     try:
-        requests.post(url, json=payload, timeout=10)
-    except:
-        pass
+        response = requests.post(url, json=payload, timeout=15)
+
+        print("Status Telegram:", response.status_code)
+        print("Resposta Telegram:", response.text)
+
+    except Exception as e:
+        print("Erro Telegram:", e)
 
 
 # ========================================
@@ -67,7 +72,7 @@ def buscar_jogos():
         "date": hoje
     }
 
-    r = requests.get(URL_FIXTURES, headers=HEADERS, params=params)
+    r = requests.get(URL_FIXTURES, headers=HEADERS, params=params, timeout=20)
 
     data = r.json()
 
@@ -93,6 +98,8 @@ def buscar_jogos():
 
         })
 
+    print(f"Jogos encontrados: {len(jogos)}")
+
     return jogos
 
 
@@ -108,7 +115,7 @@ def get_stats(team_id, league_id):
         "season": 2024
     }
 
-    r = requests.get(URL_TEAMS, headers=HEADERS, params=params)
+    r = requests.get(URL_TEAMS, headers=HEADERS, params=params, timeout=20)
 
     data = r.json()["response"]
 
@@ -140,7 +147,7 @@ def get_stats(team_id, league_id):
 
 
 # ========================================
-# ANALISE PROFISSIONAL
+# ANALISE (NÃO ALTERADA)
 # ========================================
 
 def analisar_jogo(jogo):
@@ -160,7 +167,6 @@ def analisar_jogo(jogo):
     ) / 4
 
 
-    # classificar jogo
     if goal_expectancy >= 2.7:
         game_type = "ABERTO"
 
@@ -171,7 +177,6 @@ def analisar_jogo(jogo):
         game_type = "FECHADO"
 
 
-    # filtros
     allow_over15 = (
         home["over15"] >= 70 and
         away["over15"] >= 70
@@ -188,7 +193,6 @@ def analisar_jogo(jogo):
     allow_dnb = abs(strength_diff) >= 0.40
 
 
-    # decisão
     if allow_over15:
 
         pick = "Over 1.5 gols"
@@ -208,7 +212,6 @@ def analisar_jogo(jogo):
         return None
 
 
-    # confiança
     confidence = 0
 
     if game_type == "ABERTO":
@@ -234,13 +237,9 @@ def analisar_jogo(jogo):
     return {
 
         "jogo": f"{jogo['home']} x {jogo['away']}",
-
         "liga": jogo["liga"],
-
         "tipo": game_type,
-
         "palpite": pick,
-
         "confianca": confidence
 
     }
@@ -267,8 +266,8 @@ def gerar_palpites():
             if analise is not None:
                 palpites.append(analise)
 
-        except:
-            continue
+        except Exception as e:
+            print("Erro análise:", e)
 
 
     palpites.sort(
@@ -286,7 +285,7 @@ def gerar_palpites():
 def montar_msg(palpites):
 
     if not palpites:
-        return "❌ Nenhuma aposta de valor encontrada hoje"
+        return "❌ Nenhuma aposta encontrada hoje"
 
     msg = "🎯 <b>TOP PALPITES DO DIA</b>\n\n"
 
@@ -300,18 +299,21 @@ def montar_msg(palpites):
             f"Confiança: {p['confianca']}/9\n\n"
         )
 
-    msg += "🧠 Sistema Profissional"
+    msg += "🧠 Bot Profissional"
 
     return msg
 
 
 # ========================================
-# LOOP PRINCIPAL
+# LOOP PRINCIPAL (CORRIGIDO)
 # ========================================
 
 print("🚀 BOT INICIADO")
 
 enviados_hoje = {}
+
+# mensagem inicial
+enviar_telegram("✅ BOT ONLINE")
 
 while True:
 
@@ -324,7 +326,7 @@ while True:
 
     if hora in HORARIOS_ENVIO and chave not in enviados_hoje:
 
-        print("📊 Gerando palpites...")
+        print(f"📊 Executando análise das {hora}:00")
 
         palpites = gerar_palpites()
 
@@ -334,6 +336,7 @@ while True:
 
         enviados_hoje[chave] = True
 
-        print("✅ Enviado")
+        print("✅ Enviado com sucesso")
 
-    time.sleep(60)
+
+    time.sleep(30)
