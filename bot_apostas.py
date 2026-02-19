@@ -24,7 +24,7 @@ session.headers.update(HEADERS)
 
 FUSO = pytz.timezone("America/Sao_Paulo")
 
-HORARIOS_ENVIO = [9, 12, 15, 22:30]
+HORARIOS_ENVIO = [9, 12, 15, 22]
 
 LIGAS_PERMITIDAS = [39,140,78,135,61,71,253,307,2]
 
