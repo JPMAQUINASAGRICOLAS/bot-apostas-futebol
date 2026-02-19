@@ -414,6 +414,19 @@ enviados = {}
 
 enviar_telegram("✅ BOT ONLINE")
 
+# ========================================
+# TESTE IMEDIATO
+# ========================================
+try:
+    print("TESTE: buscando jogos agora...")
+    jogos = buscar_jogos()
+    print(f"TESTE: {len(jogos)} jogos encontrados")
+except Exception as e:
+    print(f"ERRO NO TESTE: {e}")
+
+# ========================================
+# LOOP PRINCIPAL
+# ========================================
 while True:
 
     agora = datetime.datetime.now(FUSO)
