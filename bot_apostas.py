@@ -7,9 +7,9 @@ import pytz
 # CONFIGURAÇÕES
 # ========================================
 
-API_KEY = "SUA_API_AQUI"
-TOKEN_TELEGRAM = "SEU_TOKEN_AQUI"
-CHAT_ID = "SEU_CHAT_ID_AQUI"
+API_KEY = "1a185fa6bcccfcada90c54b747eb1172"
+TOKEN_TELEGRAM = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
+CHAT_ID = "6056076499"
 
 URL_FIXTURES = "https://v3.football.api-sports.io/fixtures"
 URL_TEAMS = "https://v3.football.api-sports.io/teams/statistics"
