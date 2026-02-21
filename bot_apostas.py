@@ -239,59 +239,96 @@ def professional_match_filter(jogo):
     if not home_stats or not away_stats:
         return None
 
-
     odds = jogo["odds"]
 
+    # ========================================
+    # EXPECTATIVA DE GOLS
+    # ========================================
 
     goal_expectancy = (
-
         home_stats["scored"] +
         home_stats["conceded"] +
         away_stats["scored"] +
         away_stats["conceded"]
-
     ) / 4
 
-
-    if goal_expectancy >= 2.7:
+    if goal_expectancy >= 2.6:
         game_type = "ABERTO"
-
+        confidence = 2
     elif goal_expectancy >= 2.2:
         game_type = "MEDIO"
-
+        confidence = 1
     else:
         game_type = "FECHADO"
+        confidence = 0
 
+    # ========================================
+    # OVER 1.5 (OTIMIZADO)
+    # ========================================
+
+    over15_strength = (
+        home_stats["over15"] +
+        away_stats["over15"]
+    ) / 2
 
     allow_over15 = (
-
-        home_stats["over15"] >= 70 and
-        away_stats["over15"] >= 70 and
-        odds["over15"] >= 1.35
+        over15_strength >= 65 and
+        odds["over15"] >= 1.30
     )
 
+    if allow_over15:
+        confidence += 2
+
+    # ========================================
+    # BTTS (OTIMIZADO)
+    # ========================================
+
+    btts_strength = (
+        home_stats["btts"] +
+        away_stats["btts"]
+    ) / 2
 
     allow_btts = (
-
-        home_stats["btts"] >= 60 and
-        away_stats["btts"] >= 60 and
-        odds["btts"] >= 1.60 and
+        btts_strength >= 55 and
+        odds["btts"] >= 1.55 and
         game_type != "FECHADO"
     )
 
+    if allow_btts:
+        confidence += 2
+
+    # ========================================
+    # FAVORITO (DNB)
+    # ========================================
 
     strength_diff = (
         away_stats["strength"] -
         home_stats["strength"]
     )
 
-
     allow_dnb = (
-
-        abs(strength_diff) >= 0.12 and
-        odds["dnb"] >= 1.25
+        abs(strength_diff) >= 0.25 and
+        odds["dnb"] >= 1.30
     )
 
+    if allow_dnb:
+        confidence += 1
+
+    # ========================================
+    # BONUS POR ATAQUE FORTE
+    # ========================================
+
+    if home_stats["scored"] >= 1.5:
+        confidence += 1
+
+    if away_stats["scored"] >= 1.5:
+        confidence += 1
+
+    # ========================================
+    # ESCOLHA DO MERCADO
+    # ========================================
+
+    pick = None
 
     if allow_over15:
         pick = "Over 1.5 gols"
@@ -300,37 +337,20 @@ def professional_match_filter(jogo):
         pick = "Ambas marcam"
 
     elif allow_dnb:
-
         if strength_diff > 0:
             pick = f"{jogo['away']} DNB"
         else:
             pick = f"{jogo['home']} DNB"
 
-    else:
+    if not pick:
         return None
 
-
-    confidence = 0
-
-    if game_type == "ABERTO":
-        confidence += 2
-
-    if allow_over15:
-        confidence += 2
-
-    if allow_btts:
-        confidence += 2
-
-    if abs(strength_diff) >= 0.12:
-        confidence += 1
-
-    if odds["over15"] >= 1.40:
-        confidence += 2
-
+    # ========================================
+    # FILTRO FINAL
+    # ========================================
 
     if confidence < 5:
         return None
-
 
     return {
 
