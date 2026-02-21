@@ -15,18 +15,30 @@ URL_FIXTURES = "https://v3.football.api-sports.io/fixtures"
 URL_TEAMS = "https://v3.football.api-sports.io/teams/statistics"
 URL_ODDS = "https://v3.football.api-sports.io/odds"
 
-HEADERS = {"x-apisports-key": API_KEY}
+HEADERS = {
+    "x-apisports-key": API_KEY
+}
 
 session = requests.Session()
 session.headers.update(HEADERS)
 
 FUSO = pytz.timezone("America/Sao_Paulo")
 
-# Analisa todo horário
-HORARIOS_ENVIO = list(range(24))
+HORARIOS_ENVIO = [0, 8, 12, 15, 18, 20]
 
-# Ligas confiáveis
-LIGAS_PERMITIDAS = [39,140,78,135,61,71,253,307,2]
+# Ligas permitidas
+LIGAS_PERMITIDAS = [
+    39,   # Premier League
+    140,  # La Liga
+    78,   # Bundesliga
+    135,  # Serie A
+    61,   # Ligue 1
+    71,   # Brasileirão
+    94,   # Portugal
+    253,  # MLS
+    307,  # Saudi
+    2     # Champions League
+]
 
 stats_cache = {}
 
@@ -35,109 +47,140 @@ stats_cache = {}
 # ========================================
 
 def enviar_telegram(msg):
+
+    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
+
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": msg,
+        "parse_mode": "HTML"
+    }
+
     try:
-        url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
-        payload = {
-            "chat_id": CHAT_ID,
-            "text": msg,
-            "parse_mode": "HTML"
-        }
         requests.post(url, json=payload, timeout=10)
-    except Exception as e:
-        print("Erro Telegram:", e)
+    except:
+        pass
+
 
 # ========================================
-# BUSCAR ODDS POR FIXTURE (VERSÃO CORRETA)
-# ========================================
-
-def get_odds(fixture_id):
-    try:
-        r = session.get(URL_ODDS, params={"fixture": fixture_id}, timeout=15)
-        response = r.json()
-
-        if "response" not in response or not response["response"]:
-            return None
-
-        bookmakers = response["response"][0]["bookmakers"]
-
-        odds = {"over15": 0, "btts": 0, "dnb": 0}
-
-        for book in bookmakers:
-            for bet in book["bets"]:
-
-                if bet["name"] == "Goals Over/Under":
-                    for v in bet["values"]:
-                        if v["value"] == "Over 1.5":
-                            odds["over15"] = float(v["odd"])
-
-                if bet["name"] == "Both Teams Score":
-                    for v in bet["values"]:
-                        if v["value"] == "Yes":
-                            odds["btts"] = float(v["odd"])
-
-                if bet["name"] == "Draw No Bet":
-                    values = bet["values"]
-                    odds["dnb"] = max(
-                        float(values[0]["odd"]),
-                        float(values[1]["odd"])
-                    )
-
-        if odds["over15"] == 0 and odds["btts"] == 0 and odds["dnb"] == 0:
-            return None
-
-        return odds
-
-    except Exception as e:
-        print(f"Erro odds {fixture_id}:", e)
-        return None
-
-# ========================================
-# BUSCAR JOGOS DO DIA
+# BUSCAR JOGOS
 # ========================================
 
 def buscar_jogos():
+
     hoje = datetime.datetime.now(FUSO).strftime("%Y-%m-%d")
 
     try:
-        r = session.get(URL_FIXTURES, params={"date": hoje}, timeout=20)
+
+        r = session.get(
+            URL_FIXTURES,
+            params={
+                "date": hoje,
+                "timezone": "America/Sao_Paulo"
+            },
+            timeout=20
+        )
+
         data = r.json()["response"]
+
+        print(f"TOTAL API retornou: {len(data)} jogos")
 
         jogos = []
 
         for jogo in data:
+
             liga_id = jogo["league"]["id"]
             status = jogo["fixture"]["status"]["short"]
-
-            if liga_id not in LIGAS_PERMITIDAS:
-                continue
 
             if status != "NS":
                 continue
 
-            fixture_id = jogo["fixture"]["id"]
-
-            odds = get_odds(fixture_id)
-
-            if not odds:
+            if liga_id not in LIGAS_PERMITIDAS:
                 continue
 
             jogos.append({
-                "fixture_id": fixture_id,
+
+                "fixture_id": jogo["fixture"]["id"],
+
                 "home": jogo["teams"]["home"]["name"],
                 "away": jogo["teams"]["away"]["name"],
+
                 "home_id": jogo["teams"]["home"]["id"],
                 "away_id": jogo["teams"]["away"]["id"],
+
                 "liga": jogo["league"]["name"],
-                "liga_id": liga_id,
-                "odds": odds
+                "liga_id": liga_id
             })
 
-        print(f"✅ Jogos encontrados hoje: {len(jogos)}")
+        print(f"✅ Jogos válidos encontrados: {len(jogos)}")
+
         return jogos
 
     except Exception as e:
+
         print("Erro buscar jogos:", e)
         return []
+
+
+# ========================================
+# BUSCAR ODDS
+# ========================================
+
+def get_odds(fixture_id):
+
+    try:
+
+        r = session.get(
+            URL_ODDS,
+            params={"fixture": fixture_id},
+            timeout=15
+        )
+
+        data = r.json()["response"]
+
+        if not data:
+            return None
+
+        bookmakers = data[0]["bookmakers"]
+
+        odds = {
+            "over15": 0,
+            "btts": 0,
+            "dnb": 0
+        }
+
+        for book in bookmakers:
+
+            for bet in book["bets"]:
+
+                if bet["name"] == "Goals Over/Under":
+
+                    for v in bet["values"]:
+
+                        if v["value"] == "Over 1.5":
+                            odds["over15"] = float(v["odd"])
+
+
+                if bet["name"] == "Both Teams Score":
+
+                    for v in bet["values"]:
+
+                        if v["value"] == "Yes":
+                            odds["btts"] = float(v["odd"])
+
+
+                if bet["name"] == "Draw No Bet":
+
+                    odds["dnb"] = max(
+                        float(bet["values"][0]["odd"]),
+                        float(bet["values"][1]["odd"])
+                    )
+
+        return odds
+
+    except:
+        return None
+
 
 # ========================================
 # BUSCAR STATS
@@ -151,11 +194,16 @@ def get_stats(team_id, league_id):
         return stats_cache[chave]
 
     try:
-        r = session.get(URL_TEAMS, params={
-            "team": team_id,
-            "league": league_id,
-            "season": datetime.datetime.now().year
-        }, timeout=20)
+
+        r = session.get(
+            URL_TEAMS,
+            params={
+                "team": team_id,
+                "league": league_id,
+                "season": datetime.datetime.now().year
+            },
+            timeout=15
+        )
 
         data = r.json()["response"]
 
@@ -165,126 +213,152 @@ def get_stats(team_id, league_id):
             return None
 
         stats = {
-            "scored": data["goals"]["for"]["total"]["total"] / jogos,
-            "conceded": data["goals"]["against"]["total"]["total"] / jogos,
-            "over15": float(data["fixtures"]["over"]["1.5"]["percentage"].replace("%","")),
-            "btts": float(data["fixtures"]["both_teams_score"]["percentage"].replace("%","")),
-            "strength": (
+
+            "scored":
+            data["goals"]["for"]["total"]["total"] / jogos,
+
+            "conceded":
+            data["goals"]["against"]["total"]["total"] / jogos,
+
+            "over15":
+            float(data["fixtures"]["over"]["1.5"]["percentage"].replace("%","")),
+
+            "btts":
+            float(data["fixtures"]["both_teams_score"]["percentage"].replace("%","")),
+
+            "strength":
+            (
                 data["goals"]["for"]["total"]["total"]
                 - data["goals"]["against"]["total"]["total"]
             ) / jogos
         }
 
         stats_cache[chave] = stats
+
         return stats
 
     except:
         return None
 
+
 # ========================================
-# FILTRO PROFISSIONAL
+# ANALISAR JOGO
 # ========================================
 
 def analisar_jogo(jogo):
 
-    home = get_stats(jogo["home_id"], jogo["liga_id"])
-    away = get_stats(jogo["away_id"], jogo["liga_id"])
+    odds = get_odds(jogo["fixture_id"])
 
-    if not home or not away:
+    if not odds:
         return None
 
-    odds = jogo["odds"]
+    home_stats = get_stats(jogo["home_id"], jogo["liga_id"])
+    away_stats = get_stats(jogo["away_id"], jogo["liga_id"])
+
+    if not home_stats or not away_stats:
+        return None
+
     confidence = 0
-    pick = None
 
     goal_expectancy = (
-        home["scored"] +
-        home["conceded"] +
-        away["scored"] +
-        away["conceded"]
+        home_stats["scored"] +
+        home_stats["conceded"] +
+        away_stats["scored"] +
+        away_stats["conceded"]
     ) / 4
 
-    if goal_expectancy >= 2.4:
-        confidence += 1
-
-    over_strength = (home["over15"] + away["over15"]) / 2
-    btts_strength = (home["btts"] + away["btts"]) / 2
-    strength_diff = away["strength"] - home["strength"]
-
-    if over_strength >= 65 and odds["over15"] >= 1.30:
-        pick = "Over 1.5 gols"
+    if goal_expectancy >= 2.5:
         confidence += 2
 
-    elif btts_strength >= 55 and odds["btts"] >= 1.55:
-        pick = "Ambas marcam"
+    if (home_stats["over15"] + away_stats["over15"]) / 2 >= 65:
         confidence += 2
 
-    elif abs(strength_diff) >= 0.30 and odds["dnb"] >= 1.30:
-        if strength_diff > 0:
-            pick = f"{jogo['away']} DNB"
-        else:
-            pick = f"{jogo['home']} DNB"
+    if (home_stats["btts"] + away_stats["btts"]) / 2 >= 55:
+        confidence += 2
+
+    if odds["over15"] >= 1.30:
         confidence += 1
 
-    if home["scored"] >= 1.5:
-        confidence += 1
-    if away["scored"] >= 1.5:
+    if odds["btts"] >= 1.55:
         confidence += 1
 
-    if confidence < 3:
+    if confidence < 4:
         return None
 
+    if odds["over15"] >= odds["btts"]:
+        pick = "Over 1.5 gols"
+    else:
+        pick = "Ambas marcam"
+
     return {
+
         "jogo": f"{jogo['home']} x {jogo['away']}",
         "liga": jogo["liga"],
         "palpite": pick,
-        "conf": confidence
+        "confianca": confidence
     }
+
 
 # ========================================
 # GERAR PALPITES
 # ========================================
 
 def gerar_palpites():
+
     enviar_telegram("🤖 Analisando jogos...")
+
     jogos = buscar_jogos()
 
     palpites = []
-    for j in jogos:
-        resultado = analisar_jogo(j)
+
+    for jogo in jogos:
+
+        resultado = analisar_jogo(jogo)
+
         if resultado:
             palpites.append(resultado)
 
-    return sorted(palpites, key=lambda x: x["conf"], reverse=True)[:5]
+    palpites.sort(
+        key=lambda x: x["confianca"],
+        reverse=True
+    )
+
+    print(f"✅ Palpites encontrados: {len(palpites)}")
+
+    return palpites[:5]
+
 
 # ========================================
-# MENSAGEM
+# MONTAR MSG
 # ========================================
 
 def montar_msg(palpites):
 
     if not palpites:
-        return "❌ Nenhuma aposta encontrada hoje"
+        return "❌ Nenhum palpite encontrado"
 
     msg = "🎯 <b>TOP PALPITES DO DIA</b>\n\n"
 
     for p in palpites:
+
         msg += (
             f"<b>{p['jogo']}</b>\n"
             f"Liga: {p['liga']}\n"
-            f"Mercado: {p['palpite']}\n"
-            f"Confiança: {p['conf']}/6\n\n"
+            f"Palpite: {p['palpite']}\n"
+            f"Confiança: {p['confianca']}/8\n\n"
         )
 
     msg += "🧠 Bot Profissional"
 
     return msg
 
+
 # ========================================
-# LOOP PRINCIPAL
+# INICIAR BOT
 # ========================================
 
 print("BOT ONLINE")
+
 enviar_telegram("✅ BOT ONLINE")
 
 enviados = {}
@@ -292,15 +366,19 @@ enviados = {}
 while True:
 
     agora = datetime.datetime.now(FUSO)
+
     chave = f"{agora.date()}-{agora.hour}"
 
     if agora.hour in HORARIOS_ENVIO and chave not in enviados:
 
         palpites = gerar_palpites()
+
         msg = montar_msg(palpites)
+
         enviar_telegram(msg)
 
         enviados[chave] = True
+
         print("ENVIADO", chave)
 
-    time.sleep(60)
+    time.sleep(30)
