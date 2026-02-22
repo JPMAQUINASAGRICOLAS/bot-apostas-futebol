@@ -15,23 +15,22 @@ HEADERS = {"X-Auth-Token": API_TOKEN, "User-Agent": "Mozilla/5.0"}
 FUSO = pytz.timezone("America/Sao_Paulo")
 
 def enviar_telegram(msg):
-    # URL CORRIGIDA COM /bot
-    url = f"https://api.telegram.org{TOKEN_TELEGRAM}/sendMessage"
+    # ✅ CORRIGIDO: Adicionado /bot antes do token
+    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML"}
     try:
         r = requests.post(url, json=payload, timeout=10)
-        print(f"Status Telegram: {r.status_code}") 
-        if r.status_code != 200:
-            print(f"Resposta Erro Telegram: {r.text}")
+        print(f"Status Telegram: {r.status_code}")
+        print(f"Resposta Telegram: {r.text}")
     except Exception as e:
-        print(f"Erro ao conectar com Telegram: {e}")
+        print(f"Erro Telegram: {e}")
 
 # ========================================
 # CAPTURA DE JOGOS
 # ========================================
 def buscar_jogos_reais():
-    # URL CORRIGIDA COM /v4/matches
-    url = "https://api.football-data.org"
+    # ✅ CORRIGIDO: Adicionado /v4/matches na URL
+    url = "https://api.football-data.org/v4/matches"
     try:
         r = requests.get(url, headers=HEADERS, timeout=15)
         if r.status_code != 200:
@@ -52,11 +51,10 @@ def buscar_jogos_reais():
                 })
         return lista_final
     except Exception as e:
-        print(f"Erro na captura de jogos: {e}")
+        print(f"Erro na captura: {e}")
         return []
 
 def filtrar_jogo(jogo):
-    # Estatísticas simuladas para manter sua lógica original
     stats = {"scored": 1.8, "conceded": 1.2, "over15": 80, "btts": 65}
     goal_expectancy = (stats["scored"] + stats["conceded"])
     
@@ -74,22 +72,15 @@ def filtrar_jogo(jogo):
         "confianca": conf
     }
 
-# ========================================
-# EXECUÇÃO PRINCIPAL
-# ========================================
 def executar():
     agora = datetime.datetime.now(FUSO)
     hora_msg = agora.strftime('%H:%M')
     print(f"[{hora_msg}] Iniciando análise...")
     
-    # MANDA UM SINAL DE VIDA PARA TESTAR O TELEGRAM
-    enviar_telegram(f"🤖 Bot acordou às {hora_msg} e está analisando os jogos!")
-    
     jogos = buscar_jogos_reais()
     
     if not jogos:
         print("Nenhum jogo disponível agora.")
-        enviar_telegram(f"⚠️ Nenhuma partida encontrada nas ligas principais agora ({hora_msg}).")
         return
 
     palpites = []
@@ -99,10 +90,9 @@ def executar():
             palpites.append(res)
 
     if not palpites:
-        enviar_telegram(f"📉 Analisei {len(jogos)} jogos, mas nenhum passou no filtro profissional.")
+        print("Nenhum palpite filtrado.")
         return
 
-    # Montagem da Mensagem do Telegram
     msg = f"🎯 <b>TOP PALPITES - {hora_msg}</b>\n\n"
     for p in palpites[:5]:
         msg += (
