@@ -13,7 +13,7 @@ HEADERS = {"X-Auth-Token": API_TOKEN, "User-Agent": "Mozilla/5.0"}
 FUSO = pytz.timezone("America/Sao_Paulo")
 
 # Horários de envio
-HORARIOS = ["00:00", "08:00", "16:11"]
+HORARIOS = ["00:00", "08:00", "16:15"]
 
 # ==============================
 # FUNÇÃO DE ENVIO TELEGRAM
