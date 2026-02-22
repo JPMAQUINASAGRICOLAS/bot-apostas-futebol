@@ -14,7 +14,7 @@ API_KEY = "63f7daeeecc84264992bd70d5d911610"
 HEADERS = {"X-Auth-Token": API_KEY}
 FUSO = pytz.timezone("America/Sao_Paulo")
 
-HORARIOS_ENVIO = ["00:00", "08:00", "15:00"]
+HORARIOS_ENVIO = ["00:00", "01:42", "15:00"]
 ultimo_envio = None
 
 # =========================
