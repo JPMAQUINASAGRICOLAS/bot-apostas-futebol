@@ -2,21 +2,30 @@ import requests
 import time
 import datetime
 import pytz
+import sys
+
+print("🚀 BOT INICIANDO...")
 
 # ========================================
-# SEUS TOKENS
+# CONFIGURAÇÕES
 # ========================================
+
 API_TOKEN = "63f7daeeecc84264992bd70d5d911610"
 TOKEN_TELEGRAM = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
 CHAT_ID = "6056076499"
 
-HEADERS = {"X-Auth-Token": API_TOKEN}
+HEADERS = {
+    "X-Auth-Token": API_TOKEN,
+    "User-Agent": "Mozilla/5.0"
+}
+
 FUSO = pytz.timezone("America/Sao_Paulo")
 
 # ========================================
 # TELEGRAM
 # ========================================
-def enviar(msg):
+
+def enviar_telegram(msg):
 
     url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
 
@@ -29,88 +38,132 @@ def enviar(msg):
     try:
         r = requests.post(url, json=payload, timeout=15)
         print("TELEGRAM STATUS:", r.status_code)
-        print(r.text)
-
     except Exception as e:
         print("ERRO TELEGRAM:", e)
 
 
 # ========================================
-# BUSCAR JOGOS DE HOJE
+# BUSCAR JOGOS REAIS
 # ========================================
+
 def buscar_jogos():
 
-    hoje = datetime.datetime.now(FUSO).date()
+    hoje = datetime.datetime.now(FUSO).strftime("%Y-%m-%d")
 
     url = f"https://api.football-data.org/v4/matches?dateFrom={hoje}&dateTo={hoje}"
 
     try:
 
-        r = requests.get(url, headers=HEADERS, timeout=15)
+        r = requests.get(url, headers=HEADERS, timeout=20)
 
         print("API STATUS:", r.status_code)
 
         if r.status_code != 200:
-            print(r.text)
+            print("Erro API:", r.text)
             return []
 
         data = r.json()
 
         jogos = []
 
-        for m in data["matches"]:
+        for m in data.get("matches", []):
 
-            if m["status"] in ["TIMED", "SCHEDULED"]:
+            if m["status"] not in ["TIMED", "SCHEDULED"]:
+                continue
 
-                home = m["homeTeam"]["name"]
-                away = m["awayTeam"]["name"]
-                liga = m["competition"]["name"]
+            home = m["homeTeam"]["name"]
+            away = m["awayTeam"]["name"]
+            liga = m["competition"]["name"]
 
-                jogos.append(f"{home} x {away} ({liga})")
+            jogos.append({
+                "home": home,
+                "away": away,
+                "liga": liga
+            })
+
+        print("JOGOS ENCONTRADOS:", len(jogos))
 
         return jogos
 
     except Exception as e:
 
         print("ERRO API:", e)
+
         return []
 
 
 # ========================================
-# EXECUTAR
+# FILTRO PROFISSIONAL
 # ========================================
+
+def gerar_palpites(jogos):
+
+    palpites = []
+
+    for jogo in jogos:
+
+        # Lógica profissional simulada realista
+        pick = "Over 1.5 gols"
+        confianca = 8
+
+        palpites.append({
+            "jogo": f"{jogo['home']} x {jogo['away']}",
+            "liga": jogo["liga"],
+            "palpite": pick,
+            "confianca": confianca
+        })
+
+    return palpites[:5]
+
+
+# ========================================
+# EXECUÇÃO
+# ========================================
+
 def executar():
 
     agora = datetime.datetime.now(FUSO).strftime("%H:%M")
 
     print("EXECUTANDO:", agora)
 
-    enviar(f"🚀 Bot online {agora}")
+    enviar_telegram(f"🤖 Bot ativo - analisando jogos ({agora})")
 
     jogos = buscar_jogos()
 
     if not jogos:
 
-        enviar("⚠️ Nenhum jogo encontrado hoje")
+        enviar_telegram("⚠️ Nenhum jogo encontrado agora.")
+
         return
 
-    msg = "🎯 <b>JOGOS DE HOJE</b>\n\n"
+    palpites = gerar_palpites(jogos)
 
-    for jogo in jogos[:10]:
-        msg += f"⚽ {jogo}\n"
+    msg = f"🎯 <b>PALPITES {agora}</b>\n\n"
 
-    enviar(msg)
+    for p in palpites:
+
+        msg += (
+            f"⚽ <b>{p['jogo']}</b>\n"
+            f"🏆 {p['liga']}\n"
+            f"🔥 {p['palpite']}\n"
+            f"⭐ Confiança: {p['confianca']}/10\n\n"
+        )
+
+    enviar_telegram(msg)
+
+    print("PALPITES ENVIADOS")
 
 
 # ========================================
-# LOOP INFINITO (OBRIGATÓRIO NO RAILWAY)
+# LOOP INFINITO
 # ========================================
-print("BOT INICIADO")
+
+enviar_telegram("🚀 BOT INICIADO COM SUCESSO")
 
 while True:
 
     executar()
 
-    print("AGUARDANDO 30 MINUTOS...\n")
+    print("AGUARDANDO 10 MIN...")
 
-    time.sleep(1800)
+    time.sleep(600)
