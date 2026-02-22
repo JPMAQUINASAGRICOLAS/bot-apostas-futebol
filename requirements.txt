@@ -1,4 +1,4 @@
 requests
-python-telegram-bot
 pytz
-python-dateutil
+cloudscraper
+beautifulsoup4
