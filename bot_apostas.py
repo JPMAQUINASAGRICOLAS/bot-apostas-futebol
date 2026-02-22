@@ -9,12 +9,12 @@ import pytz
 
 TOKEN_TELEGRAM = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
 CHAT_ID = "6056076499"
-API_KEY = "63f7daeeecc84264992bd70d5d911610"
+API_TOKEN = "63f7daeeecc84264992bd70d5d911610"
 
 HEADERS = {"X-Auth-Token": API_KEY}
 FUSO = pytz.timezone("America/Sao_Paulo")
 
-HORARIOS_ENVIO = ["00:00", "01:42", "15:00"]
+HORARIOS_ENVIO = ["00:00", "01:45", "15:00"]
 ultimo_envio = None
 
 # =========================
