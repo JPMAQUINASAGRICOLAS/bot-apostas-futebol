@@ -1,6 +1,7 @@
 import requests
 import datetime
 import pytz
+import time
 
 # ==========================================
 # CONFIGURAÇÕES
@@ -27,13 +28,12 @@ def enviar_telegram(msg):
 
     try:
         r = requests.post(url, data=payload, timeout=15)
-        print("STATUS TELEGRAM:", r.status_code)
-        print("RESPOSTA:", r.text)
+        print("Telegram:", r.status_code, r.text)
     except Exception as e:
-        print("ERRO TELEGRAM:", e)
+        print("Erro Telegram:", e)
 
 # ==========================================
-# BUSCAR JOGOS DO DIA
+# BUSCAR JOGOS
 # ==========================================
 
 def buscar_jogos():
@@ -52,73 +52,76 @@ def buscar_jogos():
     }
 
     try:
-        r = requests.get(url, headers=headers, params=params, timeout=15)
+        r = requests.get(url, headers=headers, params=params)
 
-        print("STATUS API:", r.status_code)
+        print("API:", r.status_code)
 
         if r.status_code != 200:
-            print("ERRO API:", r.text)
+            print(r.text)
             return []
 
-        data = r.json()
-        return data.get("matches", [])
+        return r.json()["matches"]
 
     except Exception as e:
-        print("ERRO BUSCAR JOGOS:", e)
+        print("Erro API:", e)
         return []
 
 # ==========================================
-# GERAR PALPITES SIMPLES
+# GERAR MSG
 # ==========================================
 
-def gerar_palpites():
+def gerar_msg():
 
     jogos = buscar_jogos()
 
-    if not jogos:
-        return None
-
     agora = datetime.datetime.now(FUSO).strftime("%H:%M")
 
-    msg = f"🎯 PALPITES DO DIA ({agora})\n\n"
+    if not jogos:
+        return f"❌ Nenhum jogo encontrado ({agora})"
 
-    contador = 0
+    msg = f"🎯 PALPITES ({agora})\n\n"
 
-    for jogo in jogos:
+    count = 0
 
-        if jogo["status"] in ["SCHEDULED", "TIMED"]:
+    for j in jogos:
 
-            home = jogo["homeTeam"]["name"]
-            away = jogo["awayTeam"]["name"]
-            liga = jogo["competition"]["name"]
+        if j["status"] in ["SCHEDULED", "TIMED"]:
 
-            msg += (
-                f"⚽ {home} x {away}\n"
-                f"🏆 {liga}\n"
-                f"🔥 Palpite: Over 1.5 gols\n\n"
-            )
+            msg += f"{j['homeTeam']['name']} x {j['awayTeam']['name']}\n"
+            msg += f"{j['competition']['name']}\n"
+            msg += f"Palpite: Over 1.5 gols\n\n"
 
-            contador += 1
+            count += 1
 
-        if contador >= 5:
+        if count == 5:
             break
-
-    if contador == 0:
-        return None
 
     return msg
 
 # ==========================================
-# EXECUTAR
+# LOOP INFINITO
 # ==========================================
 
-if __name__ == "__main__":
+print("BOT INICIADO")
 
-    print("BOT ONLINE")
+enviar_telegram("🤖 BOT ONLINE")
 
-    mensagem = gerar_palpites()
+while True:
 
-    if mensagem:
-        enviar_telegram(mensagem)
-    else:
-        enviar_telegram("❌ Nenhum jogo encontrado hoje.")
+    try:
+
+        print("Buscando jogos...")
+
+        msg = gerar_msg()
+
+        enviar_telegram(msg)
+
+        print("Aguardando 1 hora...")
+
+        time.sleep(3600)
+
+    except Exception as e:
+
+        print("Erro geral:", e)
+
+        time.sleep(60)
