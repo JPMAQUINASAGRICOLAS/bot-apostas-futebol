@@ -1,112 +1,124 @@
 import requests
-import time
 import datetime
 import pytz
-import sys
 
-# ========================================
-# CONFIGURAÇÕES - TUDO PRONTO
-# ========================================
-API_TOKEN = "63f7daeeecc84264992bd70d5d911610" 
+# ==========================================
+# CONFIGURAÇÕES
+# ==========================================
+
+API_TOKEN = "63f7daeeecc84264992bd70d5d911610"
 TOKEN_TELEGRAM = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
 CHAT_ID = "6056076499"
 
-HEADERS = {"X-Auth-Token": API_TOKEN, "User-Agent": "Mozilla/5.0"}
 FUSO = pytz.timezone("America/Sao_Paulo")
 
+# ==========================================
+# TELEGRAM
+# ==========================================
+
 def enviar_telegram(msg):
-    # ✅ CORRIGIDO: Adicionado /bot antes do token
+
     url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML"}
-    try:
-        r = requests.post(url, json=payload, timeout=10)
-        print(f"Status Telegram: {r.status_code}")
-        print(f"Resposta Telegram: {r.text}")
-    except Exception as e:
-        print(f"Erro Telegram: {e}")
 
-# ========================================
-# CAPTURA DE JOGOS
-# ========================================
-def buscar_jogos_reais():
-    # ✅ CORRIGIDO: Adicionado /v4/matches na URL
-    url = "https://api.football-data.org/v4/matches"
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=15)
-        if r.status_code != 200:
-            print(f"Erro API: {r.status_code} - {r.text}")
-            return []
-        
-        data = r.json()
-        jogos_brutos = data.get("matches", [])
-        
-        lista_final = []
-        for m in jogos_brutos:
-            if m["status"] in ["TIMED", "SCHEDULED"]:
-                lista_final.append({
-                    "home": m["homeTeam"]["shortName"] or m["homeTeam"]["name"],
-                    "away": m["awayTeam"]["shortName"] or m["awayTeam"]["name"],
-                    "liga": m["competition"]["name"],
-                    "odds": {"over15": 1.45, "btts": 1.70, "dnb": 1.55}
-                })
-        return lista_final
-    except Exception as e:
-        print(f"Erro na captura: {e}")
-        return []
-
-def filtrar_jogo(jogo):
-    stats = {"scored": 1.8, "conceded": 1.2, "over15": 80, "btts": 65}
-    goal_expectancy = (stats["scored"] + stats["conceded"])
-    
-    if goal_expectancy >= 2.6:
-        pick = "Over 1.5 gols"
-        conf = 8
-    else:
-        pick = f"DNB {jogo['home']}"
-        conf = 6
-
-    return {
-        "jogo": f"{jogo['home']} x {jogo['away']}",
-        "liga": jogo["liga"],
-        "palpite": pick,
-        "confianca": conf
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": msg
     }
 
-def executar():
-    agora = datetime.datetime.now(FUSO)
-    hora_msg = agora.strftime('%H:%M')
-    print(f"[{hora_msg}] Iniciando análise...")
-    
-    jogos = buscar_jogos_reais()
-    
+    try:
+        r = requests.post(url, data=payload, timeout=15)
+        print("STATUS TELEGRAM:", r.status_code)
+        print("RESPOSTA:", r.text)
+    except Exception as e:
+        print("ERRO TELEGRAM:", e)
+
+# ==========================================
+# BUSCAR JOGOS DO DIA
+# ==========================================
+
+def buscar_jogos():
+
+    url = "https://api.football-data.org/v4/matches"
+
+    headers = {
+        "X-Auth-Token": API_TOKEN
+    }
+
+    hoje = datetime.datetime.now(FUSO).strftime("%Y-%m-%d")
+
+    params = {
+        "dateFrom": hoje,
+        "dateTo": hoje
+    }
+
+    try:
+        r = requests.get(url, headers=headers, params=params, timeout=15)
+
+        print("STATUS API:", r.status_code)
+
+        if r.status_code != 200:
+            print("ERRO API:", r.text)
+            return []
+
+        data = r.json()
+        return data.get("matches", [])
+
+    except Exception as e:
+        print("ERRO BUSCAR JOGOS:", e)
+        return []
+
+# ==========================================
+# GERAR PALPITES SIMPLES
+# ==========================================
+
+def gerar_palpites():
+
+    jogos = buscar_jogos()
+
     if not jogos:
-        print("Nenhum jogo disponível agora.")
-        return
+        return None
 
-    palpites = []
-    for j in jogos:
-        res = filtrar_jogo(j)
-        if res:
-            palpites.append(res)
+    agora = datetime.datetime.now(FUSO).strftime("%H:%M")
 
-    if not palpites:
-        print("Nenhum palpite filtrado.")
-        return
+    msg = f"🎯 PALPITES DO DIA ({agora})\n\n"
 
-    msg = f"🎯 <b>TOP PALPITES - {hora_msg}</b>\n\n"
-    for p in palpites[:5]:
-        msg += (
-            f"⚽ <b>{p['jogo']}</b>\n"
-            f"🏆 {p['liga']}\n"
-            f"🔥 Palpite: {p['palpite']}\n"
-            f"⭐ Confiança: {p['confianca']}/9\n\n"
-        )
-    
-    msg += "🧠 <i>Análise via Football-Data</i>"
-    enviar_telegram(msg)
-    print("✅ Sucesso: Processo concluído!")
+    contador = 0
+
+    for jogo in jogos:
+
+        if jogo["status"] in ["SCHEDULED", "TIMED"]:
+
+            home = jogo["homeTeam"]["name"]
+            away = jogo["awayTeam"]["name"]
+            liga = jogo["competition"]["name"]
+
+            msg += (
+                f"⚽ {home} x {away}\n"
+                f"🏆 {liga}\n"
+                f"🔥 Palpite: Over 1.5 gols\n\n"
+            )
+
+            contador += 1
+
+        if contador >= 5:
+            break
+
+    if contador == 0:
+        return None
+
+    return msg
+
+# ==========================================
+# EXECUTAR
+# ==========================================
 
 if __name__ == "__main__":
-    executar()
-    time.sleep(5)
-    sys.exit(0)
+
+    print("BOT ONLINE")
+
+    mensagem = gerar_palpites()
+
+    if mensagem:
+        enviar_telegram(mensagem)
+    else:
+        enviar_telegram("❌ Nenhum jogo encontrado hoje.")
