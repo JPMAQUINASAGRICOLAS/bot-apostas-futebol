@@ -2,6 +2,7 @@ import requests
 import datetime
 import pytz
 import time
+import random
 
 # ========================================
 # CONFIGURAÇÕES
@@ -11,6 +12,7 @@ TOKEN_TELEGRAM = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
 CHAT_ID = "6056076499"
 HEADERS = {"X-Auth-Token": API_TOKEN, "User-Agent": "Mozilla/5.0"}
 FUSO = pytz.timezone("America/Sao_Paulo")
+HORARIOS = [(0,0), (8,0), (16,0)]  # 00:00, 08:00, 16:00
 
 # ========================================
 # FUNÇÃO DE ENVIO AO TELEGRAM
@@ -27,7 +29,7 @@ def enviar_telegram(msg):
         return None
 
 # ========================================
-# BUSCA TODOS OS JOGOS DO DIA
+# BUSCA JOGOS DO DIA
 # ========================================
 def buscar_jogos_reais():
     hoje = datetime.datetime.now(FUSO).date()
@@ -44,11 +46,8 @@ def buscar_jogos_reais():
 
         lista_final = []
         for m in jogos_brutos:
-            # Data e hora do jogo em UTC
             utc_dt = datetime.datetime.fromisoformat(m["utcDate"].replace("Z", "+00:00"))
             jogo_data = utc_dt.astimezone(FUSO).date()
-
-            # Considera apenas jogos do dia
             if jogo_data == hoje and m["status"] in ["SCHEDULED", "TIMED"]:
                 lista_final.append({
                     "home": m["homeTeam"]["shortName"] or m["homeTeam"]["name"],
@@ -63,19 +62,13 @@ def buscar_jogos_reais():
         return []
 
 # ========================================
-# FUNÇÃO DE ANÁLISE DE JOGO
+# ANÁLISE DE CADA JOGO
 # ========================================
 def analisar_jogo(jogo):
-    # Aqui você pode incrementar a lógica com estatísticas reais
-    # Por enquanto, será baseada em heurística simples:
-    import random
-
-    # Simula força dos times (pode ser substituído por dados reais)
     home_forca = random.randint(50, 100)
     away_forca = random.randint(50, 100)
     over15_prob = random.randint(60, 95)
 
-    # Escolha do palpite mais confiável
     if home_forca > away_forca + 10:
         palpite = f"{jogo['home']} vence ou +1,5 gols"
         confianca = 9
@@ -100,21 +93,20 @@ def analisar_jogo(jogo):
 # EXECUÇÃO PRINCIPAL
 # ========================================
 def executar():
-    agora = datetime.datetime.now(FUSO).strftime('%H:%M')
-    enviar_telegram(f"🚀 <b>Bot Extreme Online!</b> Analisando jogos do dia ({agora})...")
+    agora = datetime.datetime.now(FUSO)
+    hora_min = agora.strftime('%H:%M')
+    enviar_telegram(f"🚀 <b>Bot Extreme Online!</b> Analisando jogos do dia ({hora_min})...")
 
     jogos = buscar_jogos_reais()
     if not jogos:
-        enviar_telegram(f"⚠️ Nenhum jogo agendado para hoje ({agora}).")
+        enviar_telegram(f"⚠️ Nenhum jogo agendado para hoje ({hora_min}).")
         return
 
-    # Analisar todos os jogos e selecionar os top 5 por confiança
     palpites = [analisar_jogo(j) for j in jogos]
     palpites.sort(key=lambda x: x["confianca"], reverse=True)
     top_palpites = palpites[:5]
 
-    # Monta mensagem para Telegram
-    msg = f"🎯 <b>PALPITES DO DIA - {agora}</b>\n\n"
+    msg = f"🎯 <b>PALPITES DO DIA - {hora_min}</b>\n\n"
     for p in top_palpites:
         msg += (
             f"⚽ <b>{p['jogo']}</b>\n"
@@ -122,12 +114,19 @@ def executar():
             f"🎯 Palpite: {p['palpite']}\n"
             f"🔥 Confiança: {p['confianca']}/10\n\n"
         )
-
     enviar_telegram(msg)
     print("✅ Bot finalizado.")
 
 # ========================================
-# RODAR BOT
+# LOOP AUTOMÁTICO 3X AO DIA
 # ========================================
 if __name__ == "__main__":
-    executar()
+    print("🚀 Bot Extreme Online Iniciado...")
+    while True:
+        agora = datetime.datetime.now(FUSO)
+        for h, m in HORARIOS:
+            if agora.hour == h and agora.minute == m:
+                executar()
+                # Aguarda 61 segundos para não repetir no mesmo minuto
+                time.sleep(61)
+        time.sleep(20)
