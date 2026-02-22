@@ -13,7 +13,7 @@ CHAT_ID = "6056076499"
 
 HEADERS = {"X-Auth-Token": API_TOKEN, "User-Agent": "Mozilla/5.0"}
 FUSO = pytz.timezone("America/Sao_Paulo")
-HORARIOS_ENVIO = ["00:00", "02:08", "15:00"]  # horários de envio
+HORARIOS_ENVIO = ["00:00", "02:12", "15:00"]  # horários de envio
 
 # ========================================
 # FUNÇÕES
