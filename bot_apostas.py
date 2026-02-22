@@ -4,7 +4,7 @@ import datetime
 import pytz
 
 # ========================================
-# CONFIGURAÇÕES
+# CONFIGURAÇÕES ATUALIZADAS
 # ========================================
 
 API_TOKEN = "63f7daeeecc84264992bd70d5d911610"
@@ -18,9 +18,23 @@ session = requests.Session()
 session.headers.update(HEADERS)
 
 FUSO = pytz.timezone("America/Sao_Paulo")
-LIGAS_PERMITIDAS = ['PL', 'PD', 'BL1', 'SA', 'FL1', 'BSA', 'ELC', 'PPL']
+
+# Ligas permitidas no plano FREE do football-data.org
+LIGAS_PERMITIDAS = ['PL', 'PD', 'BL1', 'SA', 'FL1', 'PPL', 'CL']
 
 stats_cache = {}
+
+# ========================================
+# TELEGRAM
+# ========================================
+
+def enviar_telegram(msg):
+    url = f"https://api.telegram.org{TOKEN_TELEGRAM}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML"}
+    try:
+        requests.post(url, json=payload, timeout=10)
+    except:
+        pass
 
 # ========================================
 # BUSCAR JOGOS (FOOTBALL-DATA.ORG)
@@ -33,13 +47,23 @@ def buscar_jogos():
 
     try:
         r = session.get(url, params=params, timeout=15)
+        
+        # Proteção contra erros de API (403, 429, etc) que geram erro JSON
+        if r.status_code != 200:
+            print(f"❌ Erro API ({r.status_code}): Resposta não é JSON válido.")
+            return []
+
         data = r.json()
         jogos = []
 
         for match in data.get("matches", []):
             liga_code = match["competition"]["code"]
-            if liga_code not in LIGAS_PERMITIDAS: continue
-            if match["status"] not in ["TIMED", "SCHEDULED"]: continue
+            
+            if liga_code not in LIGAS_PERMITIDAS:
+                continue
+
+            if match["status"] not in ["TIMED", "SCHEDULED"]:
+                continue
 
             jogos.append({
                 "fixture_id": match["id"],
@@ -49,11 +73,11 @@ def buscar_jogos():
                 "away_id": match["awayTeam"]["id"],
                 "liga": match["competition"]["name"],
                 "liga_id": liga_code,
-                "odds": {"over15": 1.45, "btts": 1.75, "dnb": 1.50} # Odds estimadas (API Free limita odds)
+                "odds": {"over15": 1.45, "btts": 1.70, "dnb": 1.50}
             })
         return jogos
     except Exception as e:
-        print(f"❌ Erro API: {e}")
+        print(f"❌ Erro inesperado ao buscar: {e}")
         return []
 
 # ========================================
@@ -67,26 +91,33 @@ def get_stats(team_id, league_id):
     try:
         url = f"{BASE_URL}/competitions/{league_id}/standings"
         r = session.get(url, timeout=10)
-        table = r.json()["standings"][0]["table"]
+        
+        if r.status_code != 200: return None
+        
+        data = r.json()
+        # Pega a tabela principal (TOTAL)
+        table = data["standings"][0]["table"]
 
         for team in table:
             if team["team"]["id"] == team_id:
                 pj = team["playedGames"]
-                if pj == 0: return None
+                if pj < 3: return None # Evita times sem histórico na temporada
+                
                 res = {
                     "scored": team["goalsFor"] / pj,
                     "conceded": team["goalsAgainst"] / pj,
-                    "over15": 75.0, # Média estimada
-                    "btts": 55.0,
+                    "over15": 75.0,
+                    "btts": 58.0,
                     "strength": (team["goalsFor"] - team["goalsAgainst"]) / pj
                 }
                 stats_cache[chave] = res
                 return res
-    except: return None
+    except:
+        return None
     return None
 
 # ========================================
-# FILTRO COM LOG DE AUDITORIA
+# FILTRO PROFISSIONAL COM LOG
 # ========================================
 
 def professional_match_filter(jogo):
@@ -94,87 +125,60 @@ def professional_match_filter(jogo):
     print(f"\n🔍 Analisando: {nome_jogo}")
 
     h = get_stats(jogo["home_id"], jogo["liga_id"])
+    # Pequeno delay para respeitar o limite de 10 requisições por minuto
+    time.sleep(2.5) 
     a = get_stats(jogo["away_id"], jogo["liga_id"])
 
     if not h or not a:
-        print(f"   ⚠️ Abortado: Sem dados estatísticos suficientes.")
+        print(f"   ⚠️ Sem dados suficientes (Ligas no início ou erro).")
         return None
 
-    # Cálculo de Expectativa
     goal_exp = (h["scored"] + h["conceded"] + a["scored"] + a["conceded"]) / 4
-    game_type = "ABERTO" if goal_exp >= 2.6 else "MEDIO" if goal_exp >= 2.1 else "FECHADO"
-    
-    # Lógica de Critérios
-    allow_over15 = h["over15"] >= 70 and a["over15"] >= 70
-    allow_btts = h["btts"] >= 55 and a["btts"] >= 55 and game_type != "FECHADO"
     diff = a["strength"] - h["strength"]
 
-    # LOG DE STATUS
-    print(f"   📊 Exp. Gols: {goal_exp:.2f} ({game_type})")
-    print(f"   📊 Força Relativa (Diff): {diff:.2f}")
+    print(f"   📊 Exp Gols: {goal_exp:.2f} | Diff Força: {diff:.2f}")
 
+    # Lógica de Palpite
     pick = None
-    if allow_over15: pick = "Over 1.5 gols"
-    elif allow_btts: pick = "Ambas marcam"
-    elif abs(diff) >= 0.15:
-        pick = f"{jogo['away'] if diff > 0 else jogo['home']} DNB"
-
+    if goal_exp >= 2.6: pick = "Over 1.5 gols"
+    elif abs(diff) >= 0.25: pick = f"{jogo['away'] if diff > 0 else jogo['home']} DNB"
+    
     if not pick:
-        print(f"   ❌ Reprovado: Não atingiu critérios de mercado.")
+        print(f"   ❌ Reprovado nos critérios técnicos.")
         return None
 
-    # Cálculo Confiança
-    conf = 4
-    if game_type == "ABERTO": conf += 2
-    if abs(diff) > 0.20: conf += 2
-    if goal_exp > 3.0: conf += 1
+    # Confiança (Simples)
+    conf = 6 if goal_exp > 3.0 or abs(diff) > 0.4 else 5
 
-    if conf < 5:
-        print(f"   ❌ Reprovado: Confiança baixa ({conf}/9)")
-        return None
-
-    print(f"   ✅ APROVADO: {pick} (Confiança {conf}/9)")
+    print(f"   ✅ APROVADO: {pick} ({conf}/9)")
     return {
-        "jogo": nome_jogo,
-        "liga": jogo["liga"],
-        "palpite": pick,
-        "tipo": game_type,
-        "confianca": conf
+        "jogo": nome_jogo, "liga": jogo["liga"], "palpite": pick, "confianca": conf
     }
 
 # ========================================
-# FUNÇÕES DE APOIO E EXECUÇÃO
+# EXECUÇÃO PRINCIPAL
 # ========================================
 
-def enviar_telegram(msg):
-    url = f"https://api.telegram.org{TOKEN_TELEGRAM}/sendMessage"
-    try: requests.post(url, json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML"}, timeout=10)
-    except: pass
-
-def montar_msg(palpites):
-    if not palpites: return "❌ Nenhum palpite encontrado com os critérios atuais."
-    msg = "🎯 <b>TOP PALPITES DO DIA</b>\n\n"
-    for p in palpites:
-        msg += f"⚽ <b>{p['jogo']}</b>\n🏆 {p['liga']}\n💎 {p['palpite']}\n📈 Confiança: {p['confianca']}/9\n\n"
-    return msg + "🧠 Bot Football-Data"
-
 def executar():
-    print(f"\n🚀 Iniciando Varredura: {datetime.datetime.now().strftime('%H:%M:%S')}")
-    enviar_telegram("🤖 Iniciando análise diária...")
+    agora = datetime.datetime.now(FUSO).strftime("%H:%M:%S")
+    print(f"🚀 Iniciando Varredura: {agora}")
     
     jogos = buscar_jogos()
-    print(f"📋 {len(jogos)} jogos pré-filtrados nas ligas permitidas.")
+    print(f"📋 {len(jogos)} jogos encontrados nas ligas permitidas.")
     
     palpites = []
     for j in jogos:
         res = professional_match_filter(j)
         if res: palpites.append(res)
-        time.sleep(1.5) # Evitar Rate Limit da API Free
+        time.sleep(2.5) # Delay crucial para não ser bloqueado pela API
 
-    palpites.sort(key=lambda x: x["confianca"], reverse=True)
-    msg = montar_msg(palpites[:5])
-    enviar_telegram(msg)
-    print("\n✅ Relatório enviado ao Telegram.")
+    if palpites:
+        msg = "🎯 <b>TOP PALPITES DO DIA</b>\n\n"
+        for p in palpites[:5]:
+            msg += f"⚽ <b>{p['jogo']}</b>\n🏆 {p['liga']}\n💎 {p['palpite']}\n📈 Confiança: {p['confianca']}/9\n\n"
+        enviar_telegram(msg)
+    else:
+        print("ℹ️ Nenhum palpite atingiu os critérios hoje.")
 
 if __name__ == "__main__":
     executar()
