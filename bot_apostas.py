@@ -1,7 +1,6 @@
 import requests
 import datetime
 import pytz
-import time
 
 # ==============================
 # CONFIGURAÇÕES
@@ -11,9 +10,6 @@ TOKEN_TELEGRAM = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
 CHAT_ID = "6056076499"
 HEADERS = {"X-Auth-Token": API_TOKEN, "User-Agent": "Mozilla/5.0"}
 FUSO = pytz.timezone("America/Sao_Paulo")
-
-# Horários de envio
-HORARIOS = ["00:00", "08:00", "16:15"]
 
 # ==============================
 # FUNÇÃO DE ENVIO TELEGRAM
@@ -33,9 +29,8 @@ def enviar_telegram(msg):
 # CAPTURA DE JOGOS DO DIA
 # ==============================
 def buscar_jogos_reais():
-    url = "https://api.football-data.org/v4/matches?dateFrom={today}&dateTo={today}".format(
-        today=datetime.datetime.now(FUSO).strftime("%Y-%m-%d")
-    )
+    hoje = datetime.datetime.now(FUSO).strftime("%Y-%m-%d")
+    url = f"https://api.football-data.org/v4/matches?dateFrom={hoje}&dateTo={hoje}"
     try:
         r = requests.get(url, headers=HEADERS, timeout=15)
         if r.status_code != 200:
@@ -48,7 +43,6 @@ def buscar_jogos_reais():
 
         lista_final = []
         for m in jogos_brutos:
-            # Filtra jogos que ainda não começaram ou agendados
             if m["status"] in ["SCHEDULED", "TIMED"]:
                 lista_final.append({
                     "home": m["homeTeam"]["shortName"] or m["homeTeam"]["name"],
@@ -65,21 +59,14 @@ def buscar_jogos_reais():
         return []
 
 # ==============================
-# FUNÇÃO DE ANÁLISE AVANÇADA
+# FUNÇÃO DE ANÁLISE SIMPLES
 # ==============================
 def analisar_jogo(jogo):
-    """
-    Retorna o melhor palpite possível:
-    - Vitória / Empate / +1,5 gols / -3,5 gols
-    Baseado em força do time (home_strength vs away_strength) e histórico simples
-    """
     home = jogo["home"]
     away = jogo["away"]
-
     home_adv = jogo["home_strength"]
     away_adv = jogo["away_strength"]
 
-    # Simples heurística de análise:
     diff = home_adv - away_adv
     pick = ""
     confianca = 0
@@ -90,7 +77,7 @@ def analisar_jogo(jogo):
     elif diff < -0.25:
         pick = f"Vitória {away}"
         confianca = 9
-    elif abs(diff) <= 0.25:
+    else:
         pick = "+1,5 gols"
         confianca = 8
 
@@ -102,28 +89,20 @@ def analisar_jogo(jogo):
     }
 
 # ==============================
-# EXECUÇÃO PRINCIPAL
+# EXECUÇÃO IMEDIATA (TESTE HOJE)
 # ==============================
-def executar():
-    agora = datetime.datetime.now(FUSO)
-    hora_msg = agora.strftime('%H:%M')
+def executar_teste_agora():
+    agora = datetime.datetime.now(FUSO).strftime('%H:%M')
+    print(f"[{agora}] 🚀 Bot Teste Imediato Iniciado!")
 
-    if hora_msg not in HORARIOS:
-        print(f"⏳ Não é horário de envio: {hora_msg}")
-        return
-
-    print(f"[{hora_msg}] 🚀 Bot Extreme Online! Analisando jogos do dia...")
-
-    enviar_telegram(f"🚀 <b>Bot Extreme Online!</b> Analisando jogos do dia ({hora_msg})...")
+    enviar_telegram(f"🚀 <b>Bot Teste Imediato!</b> Analisando jogos do dia ({agora})...")
 
     jogos = buscar_jogos_reais()
-
     if not jogos:
-        enviar_telegram(f"⚠️ Nenhum jogo agendado para hoje ({hora_msg}).")
+        enviar_telegram(f"⚠️ Nenhum jogo agendado para hoje ({agora}).")
         print("⚠️ Nenhum jogo hoje")
         return
 
-    # Analisa os jogos
     palpites = []
     for j in jogos:
         res = analisar_jogo(j)
@@ -134,7 +113,7 @@ def executar():
     palpites = sorted(palpites, key=lambda x: x["confianca"], reverse=True)[:5]
 
     # Monta a mensagem
-    msg = f"🎯 <b>PALPITES EXTREMOS - {hora_msg}</b>\n\n"
+    msg = f"🎯 <b>PALPITES DE TESTE - {agora}</b>\n\n"
     for p in palpites:
         msg += (
             f"⚽ <b>{p['jogo']}</b>\n"
@@ -142,13 +121,13 @@ def executar():
             f"🎯 Palpite: {p['palpite']}\n"
             f"🔥 Confiança: {p['confianca']}/10\n\n"
         )
-    msg += "🧠 <i>Análise avançada via Football-Data</i>"
+    msg += "🧠 <i>Análise de teste imediata</i>"
 
     enviar_telegram(msg)
-    print("✅ Bot finalizado!")
+    print("✅ Bot Teste finalizado!")
 
 # ==============================
-# LOOP DE HORÁRIOS
+# EXECUTA AGORA
 # ==============================
 if __name__ == "__main__":
-    executar()
+    executar_teste_agora()
