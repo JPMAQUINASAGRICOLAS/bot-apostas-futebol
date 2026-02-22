@@ -7,7 +7,7 @@ import pytz
 # CONFIGURAÇÕES
 # ========================================
 
-API_TOKEN = "1a185fa6bcccfcada90c54b747eb1172"
+API_TOKEN = "63f7daeeecc84264992bd70d5d911610"
 TOKEN_TELEGRAM = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
 CHAT_ID = "6056076499"
 
