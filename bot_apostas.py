@@ -15,12 +15,13 @@ HEADERS = {"X-Auth-Token": API_TOKEN, "User-Agent": "Mozilla/5.0"}
 FUSO = pytz.timezone("America/Sao_Paulo")
 
 def enviar_telegram(msg):
-    # CORRIGIDO: Adicionado /bot antes do token
-    url = f"https://api.telegram.org{TOKEN_TELEGRAM}/sendMessage"
+    # ✅ CORRIGIDO: Adicionado /bot antes do token
+    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML"}
     try:
         r = requests.post(url, json=payload, timeout=10)
-        print(f"Status Telegram: {r.status_code}") 
+        print(f"Status Telegram: {r.status_code}")
+        print(f"Resposta Telegram: {r.text}")
     except Exception as e:
         print(f"Erro Telegram: {e}")
 
@@ -28,8 +29,8 @@ def enviar_telegram(msg):
 # CAPTURA DE JOGOS
 # ========================================
 def buscar_jogos_reais():
-    # CORRIGIDO: Adicionado /v4/matches na URL
-    url = "https://api.football-data.org"
+    # ✅ CORRIGIDO: Adicionado /v4/matches na URL
+    url = "https://api.football-data.org/v4/matches"
     try:
         r = requests.get(url, headers=HEADERS, timeout=15)
         if r.status_code != 200:
