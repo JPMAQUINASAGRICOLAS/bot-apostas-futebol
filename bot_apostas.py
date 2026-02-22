@@ -6,7 +6,7 @@ import pytz
 print("🚀 BOT INICIANDO...")
 
 # =============================
-# SUAS CONFIGURAÇÕES
+# CONFIGURAÇÕES
 # =============================
 
 TOKEN_TELEGRAM = "7631269273:AAEpQ4lGTXPXt92oNpmW9t1CR4pgF0a7lvA"
@@ -24,67 +24,64 @@ FUSO = pytz.timezone("America/Sao_Paulo")
 # =============================
 
 def enviar_telegram(msg):
-
-    url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
-
     try:
-        response = requests.post(
+        url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
+
+        r = requests.post(
             url,
             json={
                 "chat_id": CHAT_ID,
                 "text": msg
             },
-            timeout=20
+            timeout=15
         )
 
-        print("📨 Telegram status:", response.status_code)
+        print("📨 Status do Telegram:", r.status_code)
 
     except Exception as e:
         print("❌ Erro Telegram:", e)
 
 
 # =============================
-# BUSCAR JOGOS
+# BUSCAR JOGOS AGENDADOS
 # =============================
 
 def buscar_jogos():
 
-    hoje = datetime.datetime.now(FUSO).strftime("%Y-%m-%d")
-
-    url = f"https://api.football-data.org/v4/matches?dateFrom={hoje}&dateTo={hoje}"
+    url = "https://api.football-data.org/v4/matches?status=SCHEDULED"
 
     try:
-
         r = requests.get(url, headers=HEADERS, timeout=20)
 
-        print("🌐 API status:", r.status_code)
+        print("🌐 Status da API:", r.status_code)
 
         if r.status_code != 200:
-            print(r.text)
+            print("Erro API:", r.text)
             return []
 
         data = r.json()
-
-        jogos = []
-
-        for m in data.get("matches", []):
-
-            if m["status"] in ["TIMED", "SCHEDULED"]:
-
-                jogos.append({
-                    "home": m["homeTeam"]["name"],
-                    "away": m["awayTeam"]["name"],
-                    "liga": m["competition"]["name"]
-                })
+        jogos = data.get("matches", [])
 
         print("⚽ Jogos encontrados:", len(jogos))
 
-        return jogos
+        lista = []
+
+        for jogo in jogos[:10]:
+
+            casa = jogo["homeTeam"]["name"]
+            fora = jogo["awayTeam"]["name"]
+            liga = jogo["competition"]["name"]
+
+            lista.append({
+                "casa": casa,
+                "fora": fora,
+                "liga": liga
+            })
+
+        return lista
 
     except Exception as e:
-
-        print("❌ Erro API:", e)
-
+        print("❌ Erro ao buscar jogos:", e)
         return []
 
 
@@ -96,15 +93,16 @@ def gerar_palpites(jogos):
 
     palpites = []
 
-    for j in jogos[:5]:
+    for j in jogos:
 
-        palpites.append({
-            "texto":
-            f"⚽ {j['home']} x {j['away']}\n"
+        texto = (
+            f"⚽ {j['casa']} x {j['fora']}\n"
             f"🏆 {j['liga']}\n"
             f"🎯 Palpite: Over 1.5 gols\n"
             f"🔥 Confiança: 8/10\n"
-        })
+        )
+
+        palpites.append(texto)
 
     return palpites
 
@@ -122,29 +120,26 @@ def executar():
     jogos = buscar_jogos()
 
     if not jogos:
-
-        enviar_telegram("⚠️ Nenhum jogo encontrado hoje.")
-
+        enviar_telegram("⚠️ Nenhum jogo agendado encontrado.")
         return
 
     palpites = gerar_palpites(jogos)
 
-    msg = f"🎯 PALPITES DO DIA ({agora})\n\n"
+    mensagem = f"🎯 PALPITES ATUALIZADOS ({agora})\n\n"
 
     for p in palpites:
+        mensagem += p + "\n"
 
-        msg += p["texto"] + "\n"
-
-    enviar_telegram(msg)
+    enviar_telegram(mensagem)
 
 
 # =============================
-# LOOP INFINITO
+# LOOP CONTÍNUO
 # =============================
 
 print("✅ BOT ONLINE")
 
-enviar_telegram("✅ Bot iniciado com sucesso.")
+enviar_telegram("🚀 Bot iniciado com sucesso.")
 
 while True:
 
